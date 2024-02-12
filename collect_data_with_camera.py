@@ -82,17 +82,21 @@ reseted = True
 
 # initialize on-screen text configurations 
 text_white = (255,255,255)
+text_black = (0,0,0)
 font = cv2.FONT_HERSHEY_SIMPLEX
 
 hit_s_text = f"Hit 'S' to start collecting data"
-hit_s_scale = 2
-hit_s_thickness = 3
-text_size = cv2.getTextSize(hit_s_text, font, hit_s_scale, hit_s_thickness)[0]
+center_scale = 3
+center_thickness = 3
+text_size = cv2.getTextSize(hit_s_text, font, center_scale, center_thickness)[0]
+
+frame_text = f"collecting: {frame_number} frames"
+frame_text_size = cv2.getTextSize(frame_text, font, center_scale, center_thickness)[0]
 
 info_scale = 1
 info_thickness = 2
-info_left = 20
-info_left_first_line = 50
+text_left = 20
+text_first_line = 50
 
 # Path for exported data, numpy arrays
 #DATA_DIR = os.path.join('HolisticApp/backend/data')
@@ -124,7 +128,6 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
 
         if not reseted and not (results.left_hand_landmarks or results.right_hand_landmarks):
             reseted = True
-        print(reseted)
         # Draw landmarks
         draw_styled_landmarks(image, results)
 
@@ -148,6 +151,10 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
               file_path = os.path.join(f"{DATA_DIR}/{label_to_train}/{set_number}")
               handDetected = False
               reseted = False
+          elif frame_number != 0:
+              frame_text_x, frame_text_y = get_centered_coordinates(frame_text_size, image)
+              cv2.putText(image, frame_text, (frame_text_x, frame_text_y), font, center_scale, text_black, center_thickness*2, cv2.LINE_AA)
+              cv2.putText(image, frame_text, (frame_text_x, frame_text_y), font, center_scale, text_white, center_thickness, cv2.LINE_AA)
           if set_number == num_examples:
               set_number = 0
               isCollecting = False
@@ -158,10 +165,11 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         if (not isCollecting and hasLabel):
             # print instruction to start collecting in the middle of the video
             hit_s_x, hit_s_y = get_centered_coordinates(text_size, image)
-            cv2.putText(image, hit_s_text, (hit_s_x, hit_s_y),font, hit_s_scale, text_white, hit_s_thickness, cv2.LINE_AA)
-        cv2.putText(image, f"Data set count: {set_number}", (info_left,info_left_first_line), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
-        cv2.putText(image, f"Frame count: {frame_number}", (info_left,info_left_first_line+30), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
-        cv2.putText(image, f"Training for label: {label_to_train}", (info_left,info_left_first_line+60), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
+            cv2.putText(image, hit_s_text, (hit_s_x, hit_s_y),font, center_scale, text_white, center_thickness, cv2.LINE_AA)
+        cv2.putText(image, f"Data set count: {set_number}", (text_left,text_first_line), font, info_scale, text_black, info_thickness*2, cv2.LINE_AA)
+        cv2.putText(image, f"Data set count: {set_number}", (text_left,text_first_line), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
+        cv2.putText(image, f"Training for label: {label_to_train}", (text_left,text_first_line+30), font, info_scale, text_black, info_thickness*2, cv2.LINE_AA)
+        cv2.putText(image, f"Training for label: {label_to_train}", (text_left,text_first_line+30), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
 
         # show to screen (frame name, actual frame)
         cv2.imshow('OpenCV Feed', image) 

@@ -44,6 +44,17 @@ def draw_styled_landmarks(image, results):
                                  mp_drawing.DrawingSpec(color=(245,117,66), thickness=2, circle_radius=4), # joint spec
                                  mp_drawing.DrawingSpec(color=(245,66,230), thickness=2, circle_radius=2) # line spec
                              )
+    
+def get_centered_coordinates(text_size, image):
+    text_width = text_size[0]
+    text_height = text_size[1]
+
+    frame_height, frame_width, _ = image.shape
+
+    text_x = int((frame_width - text_width)/2.0)
+    text_y = int((frame_height + text_height)/2.0)
+    
+    return (text_x, text_y)
 
 # Path for exported data, numpy arrays
 DATA_DIR = os.path.join('MP_Data')
@@ -68,15 +79,29 @@ model.add(Dense(signs.shape[0], activation='softmax'))
 
 model.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
 
-model.load_weights(f'{MODEL_DIR}/common_signs.keras')
+model.load_weights(f'{MODEL_DIR}/common_signs_1.keras')
 
 sequence = []
 handDetected = False
-threshold = 0.3
+reseted = True
+threshold = 0.7
 
 cap = cv2.VideoCapture(0) # access webcam
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+text_black = (0,0,0)
+text_white = (255,255,255)
+text_left = 20
+text_first_line = 50
+line_width = 30
+font = cv2.FONT_HERSHEY_SIMPLEX
+
+info_scale = 1
+info_thickness = 2
+
+center_scale = 3
+center_thickness = 3
 
 prediction = ""
 prediction2 = ""
@@ -93,9 +118,12 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         # Make detections
         image, results = mediapipe_detection(frame, holistic) # holistic: model
 
-        if (not handDetected):
+        if (not handDetected and reseted):
             if (results.left_hand_landmarks or results.right_hand_landmarks):
                 handDetected = True
+
+        if not reseted and not (results.left_hand_landmarks or results.right_hand_landmarks):
+            reseted = True
 
         # Draw landmarks
         draw_styled_landmarks(image, results)
@@ -103,29 +131,39 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         image = cv2.flip(image, 1)
         
         # Prediction logic
-        if handDetected:
-          keypoints = extract_keypoints(results)
+        if handDetected and reseted:
+            keypoints = extract_keypoints(results)
 
-          sequence.append(keypoints)
+            sequence.append(keypoints)
 
-          res = []
-          if len(sequence) == num_frames:
-              res = model.predict(np.expand_dims(sequence, axis=0))[0]
-              # visualization logic
-              if res[np.argmax(res)] > threshold:
-                  prediction = signs[np.argmax(res)]
-                  res[np.argmax(res)] = -1
-                  prediction2 = signs[np.argmax(res)]
-                  res[np.argmax(res)] = -1
-                  prediction3 = signs[np.argmax(res)]
-                  
-
-              handDetected = False
-              sequence = []
+            res = []
+            if len(sequence) == num_frames:
+                res = model.predict(np.expand_dims(sequence, axis=0))[0]
+                # visualization logic
+                if res[np.argmax(res)] > threshold:
+                    prediction = signs[np.argmax(res)]
+                    res[np.argmax(res)] = -1
+                    prediction2 = signs[np.argmax(res)]
+                    res[np.argmax(res)] = -1
+                    prediction3 = signs[np.argmax(res)]
+                    
+                handDetected = False
+                sequence = [] 
+                reseted = False
+            else:
+                collecting_text = f"collecting: {len(sequence)} frames"
+                text_size = cv2.getTextSize(collecting_text, cv2.FONT_HERSHEY_SIMPLEX, center_scale, center_thickness)[0]
+                text_x, text_y = get_centered_coordinates(text_size, image)
+                cv2.putText(image, collecting_text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, center_scale, text_black, center_thickness*2, cv2.LINE_AA)
+                cv2.putText(image, collecting_text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, center_scale, text_white, center_thickness, cv2.LINE_AA)
         
-        cv2.putText(image, f"Prediction 1: {prediction}", (20,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
-        cv2.putText(image, f"Prediction 2: {prediction2}", (20,80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
-        cv2.putText(image, f"Prediction 3: {prediction3}", (20,110), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 2, cv2.LINE_AA)
+        
+        cv2.putText(image, f"Prediction 1: {prediction}", (text_left,text_first_line), font, info_scale, text_black, info_thickness*2, cv2.LINE_AA)
+        cv2.putText(image, f"Prediction 1: {prediction}", (text_left,text_first_line), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
+        cv2.putText(image, f"Prediction 2: {prediction2}", (text_left,text_first_line+line_width), font, info_scale, text_black, info_thickness*2, cv2.LINE_AA)
+        cv2.putText(image, f"Prediction 2: {prediction2}", (text_left,text_first_line+line_width), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
+        cv2.putText(image, f"Prediction 3: {prediction3}", (text_left,text_first_line+line_width*2), font, info_scale, text_black, info_thickness*2, cv2.LINE_AA)
+        cv2.putText(image, f"Prediction 3: {prediction3}", (text_left,text_first_line+line_width*2), font, info_scale, text_white, info_thickness, cv2.LINE_AA)
 
         # show to screen (frame name, actual frame)
         cv2.imshow('OpenCV Feed', image) 
